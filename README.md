@@ -8,6 +8,8 @@
 
 # pushver
 
+![](assets/pushver.jpg)
+
 Push new version of component into projects that use it
 
 ## 🔥 Usage

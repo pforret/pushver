@@ -2,7 +2,7 @@
 ### ==============================================================================
 ### SO HOW DO YOU PROCEED WITH YOUR SCRIPT?
 ### 1. define the flags/options/parameters and defaults you need in Option:config()
-### 2. implement the different actions in Script:main() directly or with helper functions do_action1
+### 2. implement the different actions in Script:main() directly or with helper functions do_php
 ### 3. implement helper functions you defined in previous step
 ### ==============================================================================
 
@@ -45,9 +45,10 @@ flag|V|VERBOSE|also show debug messages
 flag|f|FORCE|do not ask for confirmation (always yes)
 option|L|LOG_DIR|folder for log files |$HOME/log/$script_prefix
 option|T|TMP_DIR|folder for temp files|/tmp/$script_prefix
-#option|W|WIDTH|width of the picture|800
-choice|1|action|action to perform|action1,action2,check,env,update
-param|?|input|input file/text
+option|B|BRANCH|branch to update|main
+choice|1|action|action to perform|php,check,env,update
+param|?|component|component repo e.g. pforret/statistics_module
+param|?|application|application that uses the component and should be upgraded e.g. pforret/finixproject
 " -v -e '^#' -e '^\s*$'
 }
 
@@ -61,23 +62,10 @@ function Script:main() {
   Os:require "awk"
 
   case "${action,,}" in
-  action1)
-    #TIP: use «$script_prefix action1» to ...
-    #TIP:> $script_prefix action1
-    do_action1
-    ;;
-
-  action2)
-    #TIP: use «$script_prefix action2» to ...
-    #TIP:> $script_prefix action2
-    do_action2
-    ;;
-
-  action3)
-    #TIP: use «$script_prefix action3» to ...
-    #TIP:> $script_prefix action3
-    # Os:require "convert" "imagemagick"
-    # CONVERT $input $output
+  php)
+    #TIP: use «$script_prefix php» to .push a new PHP component/library version into dependent applications (with composer)
+    #TIP:> $script_prefix php pforret/statistics_module pforret/finixproject
+    do_php
     ;;
 
   check | env)
@@ -109,8 +97,8 @@ function Script:main() {
 ## Put your helper scripts here
 #####################################################################
 
-function do_action1() {
-  IO:log "action1"
+function do_php() {
+  IO:log "php"
   # Examples of required binaries/scripts and how to install them
   # Os:require "ffmpeg"
   # Os:require "convert" "imagemagick"
