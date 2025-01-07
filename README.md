@@ -6,7 +6,7 @@
 ![GH License](https://img.shields.io/github/license/pforret/pushver)
 [![basher install](https://img.shields.io/badge/basher-install-white?logo=gnu-bash&style=flat)](https://www.basher.it/package/)
 
-# pushver
+# pforret/pushver
 
 ![](assets/pushver.jpg)
 
@@ -15,24 +15,25 @@ Push new version of component into projects that use it
 ## 🔥 Usage
 
 ```
-Program : pushver  by peter@forret.com
-Version : v0.0.1 (Apr 22 16:07:13 2023)
+Program : pushver.sh  by peter@forret.com
+Version : v0.0.1 (2024-12-27 17:27)
 Purpose : Push new version of component into projects that use it
-Usage   : pushver [-h] [-q] [-v] [-f] [-l <log_dir>] [-t <tmp_dir>] <action>
+Usage   : pushver.sh [-h] [-Q] [-V] [-f] [-L <LOG_DIR>] [-T <TMP_DIR>] [-B <BRANCH>] <action> <component?> <application?>
 Flags, options and parameters:
     -h|--help        : [flag] show usage [default: off]
-    -q|--quiet       : [flag] no output [default: off]
-    -v|--verbose     : [flag] also show debug messages [default: off]
-    -f|--force       : [flag] do not ask for confirmation (always yes) [default: off]
-    -l|--log_dir <?> : [option] folder for log files   [default: /Users/pforret/log/script]
-    -t|--tmp_dir <?> : [option] folder for temp files  [default: /tmp/script]
-    <action>         : [choice] action to perform  [options: action1,action2,check,env,update]
-                                  
+    -Q|--QUIET       : [flag] no output [default: off]
+    -V|--VERBOSE     : [flag] also show debug messages [default: off]
+    -f|--FORCE       : [flag] do not ask for confirmation (always yes) [default: off]
+    -L|--LOG_DIR <?> : [option] folder for log files   [default: /home/pforret/log/pushver]
+    -T|--TMP_DIR <?> : [option] folder for temp files  [default: /tmp/pushver]
+    -B|--BRANCH <?>  : [option] branch to update  [default: main]
+    <action>         : [choice] action to perform  [options: php,check,env,update]
+    <component>      : [parameter] component repo e.g. pforret/statistics_module (optional)
+    <application>    : [parameter] application that uses the component and should be upgraded e.g. pforret/finixproject (optional)
+                                                                                                                                                                                                                                                                                                                                                                 
 ### TIPS & EXAMPLES
-* use pushver action1 to ...
-  pushver action1
-* use pushver action2 to ...
-  pushver action2
+* use pushver php to .push a new PHP component/library version into dependent applications (with composer)
+  pushver php pforret/statistics_module pforret/finixproject
 * use pushver check to check if this script is ready to execute and what values the options/flags are
   pushver check
 * use pushver env to generate an example .env file

@@ -15,40 +15,18 @@ readonly run_as_root=-1 # run_as_root: 0 = don't check anything / 1 = script MUS
 readonly script_description="Push new version of component into projects that use it"
 
 function Option:config() {
-  ### Change the next lines to reflect which flags/options/parameters you need
-  ### flag:   switch a flag 'on' / no value specified
-  ###     flag|<short>|<long>|<description>
-  ###     e.g. "-v" or "--VERBOSE" for VERBOSE output / default is always 'off'
-  ###     will be available as $<long> in the script e.g. $VERBOSE
-  ### option: set an option / 1 value specified
-  ###     option|<short>|<long>|<description>|<default>
-  ###     e.g. "-e <extension>" or "--extension <extension>" for a file extension
-  ###     will be available a $<long> in the script e.g. $extension
-  ### list: add an list/array item / 1 value specified
-  ###     list|<short>|<long>|<description>| (default is ignored)
-  ###     e.g. "-u <user1> -u <user2>" or "--user <user1> --user <user2>"
-  ###     will be available a $<long> array in the script e.g. ${user[@]}
-  ### param:  comes after the options
-  ###     param|<type>|<long>|<description>
-  ###     <type> = 1 for single parameters - e.g. param|1|output expects 1 parameter <output>
-  ###     <type> = ? for optional parameters - e.g. param|1|output expects 1 parameter <output>
-  ###     <type> = n for list parameter    - e.g. param|n|inputs expects <input1> <input2> ... <input99>
-  ###     will be available as $<long> in the script after option/param parsing
-  ### choice:  is like a param, but when there are limited options
-  ###     choice|<type>|<long>|<description>|choice1,choice2,...
-  ###     <type> = 1 for single parameters - e.g. param|1|output expects 1 parameter <output>
   grep <<<"
 #commented lines will be filtered
 flag|h|help|show usage
 flag|Q|QUIET|no output
 flag|V|VERBOSE|also show debug messages
 flag|f|FORCE|do not ask for confirmation (always yes)
-option|L|LOG_DIR|folder for log files |$HOME/log/$script_prefix
-option|T|TMP_DIR|folder for temp files|/tmp/$script_prefix
+option|L|LOG_DIR|folder for log files |log
+option|T|TMP_DIR|folder for temp files|.tmp
 option|B|BRANCH|branch to update|main
 choice|1|action|action to perform|php,check,env,update
-param|?|component|component repo e.g. pforret/statistics_module
-param|?|application|application that uses the component and should be upgraded e.g. pforret/finixproject
+param|?|components|component repo(s) e.g. pforret/statistics_module
+param|?|applications|application(s) that use the component(s) and should be upgraded e.g. pforret/finixproject
 " -v -e '^#' -e '^\s*$'
 }
 
@@ -60,12 +38,97 @@ function Script:main() {
   IO:log "[$script_basename] $script_version started"
 
   Os:require "awk"
+  Os:require "git"
 
   case "${action,,}" in
   php)
     #TIP: use «$script_prefix php» to .push a new PHP component/library version into dependent applications (with composer)
     #TIP:> $script_prefix php pforret/statistics_module pforret/finixproject
-    do_php
+    #TIP:> $script_prefix php pforret/module1,pforret/module2 pforret/project1,company/project2
+
+    local today application component application_name application_build git_url php_version php_binary composer_binary
+    while IFS="," read -r application ; do
+        IO:announce "Updating project '$application'"
+        application_name=$(basename $application)
+        # example: git@github.com:pforret/pushver.git
+        # example: git@bitbucket.org:brightfishbe/movix-showtimes.git
+        git_url=$(guess_git_url "$application")
+        application_build="$TMP_DIR/$application_name"
+        IO:log "==== 'git clone' [$application] to [$application_build]"
+        (
+          cd "$TMP_DIR"
+          git clone "$git_url" "$application_name" &>> "$log_file"
+        )
+        [[ ! -d "$application_build" ]] && IO:die "Checkout to $application_build failed!"
+        IO:log "folder size: $(show_folder_size "$application_build")"
+        # pushd "$application_build" || IO:die "Cannot change to folder $application_build"
+
+        IO:log "==== 'git checkout' $BRANCH"
+        (
+          cd "$application_build"
+          git checkout $BRANCH &>> "$log_file"
+        )
+
+        IO:log "==== 'git pull origin' $BRANCH"
+        (
+          cd "$application_build"
+          git pull origin $BRANCH &>> "$log_file"
+        )
+        IO:log "folder size: $(show_folder_size .)"
+
+        if [[ -f "$application_build/composer.json" ]] ; then
+          php_version=$(< "$application_build/composer.json" jq -r .require.php | tr "|" "\n" | awk '{sub(/^[ \t\r\n]+/, ""); sub(/[ \t\r\n]+$/, ""); sub(/\^/,""); print}' | sort | tail -1)
+        else
+          php_version=8.3
+        fi
+        IO:log "==== PHP_VERSION = $php_version"
+
+        php_binary=$(which "php$php_version")
+        [[ -z "$php_binary" ]] &&  php_binary=$(which "php")
+        IO:log "==== PHP_BIN = $php_binary"
+
+        composer_binary=$(which composer)
+        IO:log "==== COMPOSER_BIN = $composer_binary"
+
+        IO:log "==== composer install"
+        (
+          cd "$application_build"
+          "$php_binary" "$composer_binary" install --no-interaction --no-dev --prefer-dist --optimize-autoloader --no-progress &>> "$log_file"
+        )
+        IO:debug "folder size: $(show_folder_size .)"
+
+      update_needed=""
+      while IFS="," read -r component ; do
+        IO:announce "  \_ Updating component '$component'"
+        (
+          cd "$application_build"
+          version_before="$("$php_binary" "$composer_binary" show | grep "$component" | awk '{print $2}')"
+          IO:log "Version before: $version_before"
+          "$php_binary" "$composer_binary" update "$component" &>> "$log_file"
+          version_after="$("$php_binary" "$composer_binary" show | grep "$component" | awk '{print $2}')"
+          if [[ "$version_after" != "$version_before" ]] ; then
+            update_needed="$update_needed * $component $version_after"
+            IO:success "Update '$component' : $version_before -> $version_after"
+          fi
+          IO:log "Version after: $version_after"
+        )
+      done <<< "$components"
+
+      if [[ -n $update_needed ]] ; then
+        IO:log "Components updated: $update_needed"
+        (
+          cd $application_build
+          git commit -a -m "$script_prefix: $update_needed" && git push
+        ) &>> "$log_file"
+        IO:success ""
+      else
+        IO:alert "No components were updated, no git commit/push necessary"
+      fi
+
+      IO:log "Cleanup '$application_build'"
+      rm -fr "$application_build"
+
+    done <<< "$applications"
     ;;
 
   check | env)
@@ -97,21 +160,36 @@ function Script:main() {
 ## Put your helper scripts here
 #####################################################################
 
-function do_php() {
-  IO:log "php"
-  # Examples of required binaries/scripts and how to install them
-  # Os:require "ffmpeg"
-  # Os:require "convert" "imagemagick"
-  # Os:require "IO:progressbar" "basher install pforret/IO:progressbar"
-  # (code)
+function guess_git_url() {
+  # author/component => git@github.com:author/component.git
+  # git@bitbucket.org:author/component.git => git@bitbucket.org:author/component.git
+  # git@github.com:author/component.git => git@github.com:author/component.git
+  # bitbucket.org:author/component => git@bitbucket.org:author/component.git
+  # bitbucket:author/component => git@bitbucket.org:author/component.git
+  # github.com:author/component => git@github.com:author/component.git
+  # github:author/component => git@github.com:author/component.git
+  local repo author_name git_service
+  repo="$1"
+  author_name=$(<<< "$repo" cut -d: -f2)
+  git_service=$(<<< "$repo" cut -d: -f1)
+  [[ "$git_service" == "$author_name" ]] && author_name=""
+  [[ -z "$author_name" ]] && author_name="$repo" && git_service="github.com"
+  IO:log "Guessing git URL for [$repo]: [$git_service][$author_name]"
+
+  if [[ "$repo" =~ ^git@ ]]; then
+    echo "$repo.git"
+  elif [[ "$git_service" =~ ^bitbucket ]]; then
+    echo "git@bitbucket.org:$repo.git"
+  elif [[ "$git_service" =~ ^github ]]; then
+    echo "git@github.com:$repo.git"
+  else
+    echo ""
+  fi
 }
 
-function do_action2() {
-  IO:log "action2"
-  # (code)
-
+function show_folder_size() {
+  du -sh "$1" | awk '{print $1}'
 }
-
 #####################################################################
 ################### DO NOT MODIFY BELOW THIS LINE ###################
 #####################################################################
@@ -272,7 +350,8 @@ function IO:question() {
 }
 
 function IO:log() {
-  [[ -n "${log_file:-}" ]] && echo "$(date '+%H:%M:%S') | $*" >>"$log_file"
+  IO:debug "LOG: $*"
+  [[ -n "${log_file:-}" ]]  && echo "$(date '+%H:%M:%S') | $*" >> "$log_file"
 }
 
 function Tool:calc() {
@@ -989,7 +1068,7 @@ function Script:initialize() {
   if [[ -n "${LOG_DIR:-}" ]]; then
     # clean up LOG folder after 1 month
     Os:folder "$LOG_DIR" 30
-    log_file="$LOG_DIR/$script_prefix.$execution_day.log"
+    log_file=$(realpath "$LOG_DIR/$script_prefix.$execution_day.log")
     IO:debug "$config_icon log_file: $log_file"
   fi
 }
