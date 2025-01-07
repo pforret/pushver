@@ -15,25 +15,26 @@ Push new version of component into projects that use it
 ## 🔥 Usage
 
 ```
-Program : pushver.sh  by peter@forret.com
-Version : v0.0.1 (2024-12-27 17:27)
+Program : pushver  by peter@forret.com
+Version : v0.1.0 (2025-01-07 10:50)
 Purpose : Push new version of component into projects that use it
-Usage   : pushver.sh [-h] [-Q] [-V] [-f] [-L <LOG_DIR>] [-T <TMP_DIR>] [-B <BRANCH>] <action> <component?> <application?>
+Usage   : pushver [-h] [-Q] [-V] [-f] [-L <LOG_DIR>] [-T <TMP_DIR>] [-B <BRANCH>] <action> <components?> <applications?>
 Flags, options and parameters:
     -h|--help        : [flag] show usage [default: off]
     -Q|--QUIET       : [flag] no output [default: off]
     -V|--VERBOSE     : [flag] also show debug messages [default: off]
     -f|--FORCE       : [flag] do not ask for confirmation (always yes) [default: off]
-    -L|--LOG_DIR <?> : [option] folder for log files   [default: /home/pforret/log/pushver]
-    -T|--TMP_DIR <?> : [option] folder for temp files  [default: /tmp/pushver]
+    -L|--LOG_DIR <?> : [option] folder for log files   [default: log]
+    -T|--TMP_DIR <?> : [option] folder for temp files  [default: .tmp]
     -B|--BRANCH <?>  : [option] branch to update  [default: main]
     <action>         : [choice] action to perform  [options: php,check,env,update]
-    <component>      : [parameter] component repo e.g. pforret/statistics_module (optional)
-    <application>    : [parameter] application that uses the component and should be upgraded e.g. pforret/finixproject (optional)
-                                                                                                                                                                                                                                                                                                                                                                 
+    <components>     : [parameter] component repo(s) e.g. pforret/statistics_module (optional)
+    <applications>   : [parameter] application(s) that use the component(s) and should be upgraded e.g. pforret/finixproject (optional)
+                                                                                                                                                                                                                                                                     
 ### TIPS & EXAMPLES
 * use pushver php to .push a new PHP component/library version into dependent applications (with composer)
   pushver php pforret/statistics_module pforret/finixproject
+  pushver php pforret/module1,pforret/module2 pforret/project1,company/project2
 * use pushver check to check if this script is ready to execute and what values the options/flags are
   pushver check
 * use pushver env to generate an example .env file
