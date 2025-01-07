@@ -10,7 +10,7 @@
 
 ![](assets/pushver.jpg)
 
-Push new version of component into projects that use it
+Push new version of component into projects that use it (currently only PHP/Composer)
 
 ## 🔥 Usage
 
@@ -48,10 +48,16 @@ Flags, options and parameters:
 ## ⚡️ Examples
 
 ```bash
-> pushver -h 
-# get extended usage info
-> pushver env > .env
-# create a .env file with default values
+# you just updated your component <author/component> 
+# and now you want your <author/project1> and <author/project2> to 'composer upgrade' to this latest version
+pushver php "author/component" "author/project1,git@bitbucket.org:author/project2"
+# will do the following steps for git@github.com:author/project1 and git@bitbucket.org:author/project2
+# 1. git clone project
+# 2. checkout the right branch
+# 3. composer install
+# 4. composer upgrade author/component
+# 5. if there was an upgrade: git commit & git push
+# 6. delete cloned project folder
 ```
 
 ## 🚀 Installation
