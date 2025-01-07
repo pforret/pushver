@@ -1,9 +1,9 @@
 name: bash_unit CI
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   ubuntu:
