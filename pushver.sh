@@ -46,18 +46,19 @@ function Script:main() {
     #TIP:> $script_prefix php pforret/statistics_module pforret/finixproject
     #TIP:> $script_prefix php pforret/module1,pforret/module2 pforret/project1,company/project2
 
-    local today application component application_name application_build git_url php_version php_binary composer_binary
-    while IFS="," read -r application ; do
+    # shellcheck disable=SC2154
+    echo "$applications" |
+      while IFS="," read -r application; do
         IO:announce "Updating project '$application'"
-        application_name=$(basename $application)
+        application_name=$(basename "$application")
         # example: git@github.com:pforret/pushver.git
         # example: git@bitbucket.org:brightfishbe/movix-showtimes.git
         git_url=$(guess_git_url "$application")
         application_build="$TMP_DIR/$application_name"
         IO:log "==== 'git clone' [$application] to [$application_build]"
         (
-          cd "$TMP_DIR"
-          git clone "$git_url" "$application_name" &>> "$log_file"
+          cd "$TMP_DIR" || IO:die "Folder $TMP_DIR not found"
+          git clone "$git_url" "$application_name" &>>"$log_file"
         )
         [[ ! -d "$application_build" ]] && IO:die "Checkout to $application_build failed!"
         IO:log "folder size: $(show_folder_size "$application_build")"
@@ -65,70 +66,72 @@ function Script:main() {
 
         IO:log "==== 'git checkout' $BRANCH"
         (
-          cd "$application_build"
-          git checkout $BRANCH &>> "$log_file"
+          cd "$application_build" || exit
+          git checkout "$BRANCH" &>>"$log_file"
         )
 
         IO:log "==== 'git pull origin' $BRANCH"
         (
-          cd "$application_build"
-          git pull origin $BRANCH &>> "$log_file"
+          cd "$application_build" || exit
+          git pull origin "$BRANCH" &>>"$log_file"
         )
         IO:log "folder size: $(show_folder_size .)"
 
-        if [[ -f "$application_build/composer.json" ]] ; then
-          php_version=$(< "$application_build/composer.json" jq -r .require.php | tr "|" "\n" | awk '{sub(/^[ \t\r\n]+/, ""); sub(/[ \t\r\n]+$/, ""); sub(/\^/,""); print}' | sort | tail -1)
+        if [[ -f "$application_build/composer.json" ]]; then
+          php_version=$(<"$application_build/composer.json" jq -r .require.php | tr "|" "\n" | awk '{sub(/^[ \t\r\n]+/, ""); sub(/[ \t\r\n]+$/, ""); sub(/\^/,""); print}' | sort | tail -1)
         else
           php_version=8.3
         fi
         IO:log "==== PHP_VERSION = $php_version"
 
-        php_binary=$(which "php$php_version")
-        [[ -z "$php_binary" ]] &&  php_binary=$(which "php")
+        php_binary=$(command -v "php$php_version")
+        [[ -z "$php_binary" ]] && php_binary=$(command -v "php")
         IO:log "==== PHP_BIN = $php_binary"
 
-        composer_binary=$(which composer)
+        composer_binary=$(command -v composer)
         IO:log "==== COMPOSER_BIN = $composer_binary"
 
         IO:log "==== composer install"
         (
-          cd "$application_build"
-          "$php_binary" "$composer_binary" install --no-interaction --no-dev --prefer-dist --optimize-autoloader --no-progress &>> "$log_file"
+          cd "$application_build" || exit
+          "$php_binary" "$composer_binary" install --no-interaction --no-dev --prefer-dist --optimize-autoloader --no-progress &>>"$log_file"
         )
         IO:debug "folder size: $(show_folder_size .)"
 
-      update_needed=""
-      while IFS="," read -r component ; do
-        IO:announce "  \_ Updating component '$component'"
-        (
-          cd "$application_build"
-          version_before="$("$php_binary" "$composer_binary" show | grep "$component" | awk '{print $2}')"
-          IO:log "Version before: $version_before"
-          "$php_binary" "$composer_binary" update "$component" &>> "$log_file"
-          version_after="$("$php_binary" "$composer_binary" show | grep "$component" | awk '{print $2}')"
-          if [[ "$version_after" != "$version_before" ]] ; then
-            update_needed="$update_needed * $component $version_after"
-            IO:success "Update '$component' : $version_before -> $version_after"
-          fi
-          IO:log "Version after: $version_after"
+        # shellcheck disable=SC2154
+        update_needed=$(
+          cd "$application_build" || exit
+          echo "$components" |
+            while IFS="," read -r component; do
+              IO:announce "  \_ Updating component '$component'"
+              version_before="$("$php_binary" "$composer_binary" show | grep "$component" | awk '{print $2}')"
+              IO:log "Version before: $version_before"
+              "$php_binary" "$composer_binary" update "$component" &>>"$log_file"
+              version_after="$("$php_binary" "$composer_binary" show | grep "$component" | awk '{print $2}')"
+              IO:log "Version after: $version_after"
+
+              if [[ "$version_after" != "$version_before" ]]; then
+                echo " * $component $version_after"
+                IO:success "Update '$component' : $version_before -> $version_after"
+              fi
+            done | xargs
         )
-      done <<< "$components"
 
-      if [[ -n $update_needed ]] ; then
-        IO:log "Components updated: $update_needed"
-        (
-          cd $application_build
-          git commit -a -m "$script_prefix: $update_needed" && git push
-        ) &>> "$log_file"
-        IO:success ""
-      else
-        IO:alert "No components were updated, no git commit/push necessary"
-      fi
+        if [[ -n $update_needed ]]; then
+          IO:log "Components updated: $update_needed"
+          (
+            cd "$application_build" || exit
+            git commit -a -m "$script_prefix: $update_needed" && git push
+          ) &>>"$log_file"
+          IO:success ""
+        else
+          IO:alert "No components were updated, no git commit/push necessary"
+        fi
 
-      IO:log "Cleanup '$application_build'"
-      rm -fr "$application_build"
+        IO:log "Cleanup '$application_build'"
+        rm -fr "$application_build"
 
-    done <<< "$applications"
+      done
     ;;
 
   check | env)
@@ -170,8 +173,8 @@ function guess_git_url() {
   # github:author/component => git@github.com:author/component.git
   local repo author_name git_service
   repo="$1"
-  author_name=$(<<< "$repo" cut -d: -f2)
-  git_service=$(<<< "$repo" cut -d: -f1)
+  author_name=$(<<<"$repo" cut -d: -f2)
+  git_service=$(<<<"$repo" cut -d: -f1)
   [[ "$git_service" == "$author_name" ]] && author_name=""
   [[ -z "$author_name" ]] && author_name="$repo" && git_service="github.com"
   IO:log "Guessing git URL for [$repo]: [$git_service][$author_name]"
@@ -351,7 +354,7 @@ function IO:question() {
 
 function IO:log() {
   IO:debug "LOG: $*"
-  [[ -n "${log_file:-}" ]]  && echo "$(date '+%H:%M:%S') | $*" >> "$log_file"
+  [[ -n "${log_file:-}" ]] && echo "$(date '+%H:%M:%S') | $*" >>"$log_file"
 }
 
 function Tool:calc() {
